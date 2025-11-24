@@ -15,6 +15,7 @@ interface Product {
   image: string;
   category: string;
   description: string;
+  discount?: number;
 }
 
 interface CartItem extends Product {
@@ -29,6 +30,7 @@ const products: Product[] = [
     image: 'https://images.unsplash.com/photo-1561181286-d3fee7d55364?w=400&h=400&fit=crop',
     category: 'Розы',
     description: '15 розовых роз с зеленью',
+    discount: 20,
   },
   {
     id: 2,
@@ -45,6 +47,7 @@ const products: Product[] = [
     image: 'https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=400&h=400&fit=crop',
     category: 'Тюльпаны',
     description: '21 разноцветный тюльпан',
+    discount: 15,
   },
   {
     id: 4,
@@ -61,6 +64,7 @@ const products: Product[] = [
     image: 'https://images.unsplash.com/photo-1563241527-3004b7be0ffd?w=400&h=400&fit=crop',
     category: 'Пионы',
     description: 'Белые и розовые пионы',
+    discount: 10,
   },
   {
     id: 6,
@@ -77,12 +81,17 @@ export default function Index() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('Все');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [favorites, setFavorites] = useState<number[]>([]);
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{code: string; discount: number} | null>(null);
 
-  const categories = ['Все', ...Array.from(new Set(products.map((p) => p.category)))];
+  const categories = ['Все', ...Array.from(new Set(products.map((p) => p.category))), 'Избранное'];
 
   const filteredProducts =
     selectedCategory === 'Все'
       ? products
+      : selectedCategory === 'Избранное'
+      ? products.filter((p) => favorites.includes(p.id))
       : products.filter((p) => p.category === selectedCategory);
 
   const addToCart = (product: Product) => {
@@ -111,7 +120,42 @@ export default function Index() {
     );
   };
 
-  const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const getDiscountedPrice = (product: Product) => {
+    if (product.discount) {
+      return Math.round(product.price * (1 - product.discount / 100));
+    }
+    return product.price;
+  };
+
+  const toggleFavorite = (id: number) => {
+    setFavorites(prev => 
+      prev.includes(id) ? prev.filter(fav => fav !== id) : [...prev, id]
+    );
+  };
+
+  const applyPromoCode = () => {
+    const validPromoCodes: Record<string, number> = {
+      'SPRING2024': 15,
+      'LOVE10': 10,
+      'FIRST20': 20,
+    };
+
+    const upperCode = promoCode.toUpperCase();
+    if (validPromoCodes[upperCode]) {
+      setAppliedPromo({ code: upperCode, discount: validPromoCodes[upperCode] });
+      setPromoCode('');
+    } else {
+      alert('Неверный промокод');
+    }
+  };
+
+  const totalPrice = cart.reduce((sum, item) => {
+    const price = getDiscountedPrice(item);
+    return sum + price * item.quantity;
+  }, 0);
+  
+  const promoDiscount = appliedPromo ? Math.round(totalPrice * appliedPromo.discount / 100) : 0;
+  const finalPrice = totalPrice - promoDiscount;
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleCheckout = (e: React.FormEvent) => {
@@ -139,17 +183,29 @@ export default function Index() {
               </div>
             </div>
 
-            <Button
-              onClick={() => setIsCartOpen(true)}
-              variant="outline"
-              className="relative gap-2"
-            >
-              <Icon name="ShoppingBag" size={20} />
-              <span>Корзина</span>
-              {totalItems > 0 && (
-                <Badge className="absolute -top-2 -right-2 bg-rose-500">{totalItems}</Badge>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setSelectedCategory('Избранное')}
+                variant="outline"
+                className="relative gap-2"
+              >
+                <Icon name="Heart" size={20} className={cn(favorites.length > 0 && 'fill-rose-500 text-rose-500')} />
+                {favorites.length > 0 && (
+                  <Badge className="absolute -top-2 -right-2 bg-rose-500">{favorites.length}</Badge>
+                )}
+              </Button>
+              <Button
+                onClick={() => setIsCartOpen(true)}
+                variant="outline"
+                className="relative gap-2"
+              >
+                <Icon name="ShoppingBag" size={20} />
+                <span>Корзина</span>
+                {totalItems > 0 && (
+                  <Badge className="absolute -top-2 -right-2 bg-rose-500">{totalItems}</Badge>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -192,14 +248,49 @@ export default function Index() {
                   <Badge className="absolute top-3 right-3 bg-white/90 text-pink-600">
                     {product.category}
                   </Badge>
+                  {product.discount && (
+                    <Badge className="absolute top-3 left-3 bg-red-500 text-white">
+                      -{product.discount}%
+                    </Badge>
+                  )}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="absolute top-12 right-3 bg-white/90 hover:bg-white"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(product.id);
+                    }}
+                  >
+                    <Icon 
+                      name="Heart" 
+                      size={20} 
+                      className={cn(
+                        favorites.includes(product.id) && 'fill-rose-500 text-rose-500'
+                      )}
+                    />
+                  </Button>
                 </div>
                 <div className="p-5">
                   <h3 className="text-xl font-bold text-slate-900 mb-2">{product.name}</h3>
                   <p className="text-sm text-slate-600 mb-4">{product.description}</p>
                   <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold text-rose-600">
-                      {product.price.toLocaleString()} ₽
-                    </span>
+                    <div>
+                      {product.discount ? (
+                        <>
+                          <span className="text-sm text-slate-400 line-through block">
+                            {product.price.toLocaleString()} ₽
+                          </span>
+                          <span className="text-2xl font-bold text-rose-600">
+                            {getDiscountedPrice(product).toLocaleString()} ₽
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-2xl font-bold text-rose-600">
+                          {product.price.toLocaleString()} ₽
+                        </span>
+                      )}
+                    </div>
                     <Button
                       onClick={() => addToCart(product)}
                       className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600"
@@ -309,12 +400,43 @@ export default function Index() {
             </div>
 
             {cart.length > 0 && (
-              <div className="p-6 border-t border-slate-200">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-lg font-semibold text-slate-900">Итого:</span>
-                  <span className="text-2xl font-bold text-rose-600">
-                    {totalPrice.toLocaleString()} ₽
-                  </span>
+              <div className="p-6 border-t border-slate-200 space-y-4">
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Введите промокод"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value)}
+                  />
+                  <Button onClick={applyPromoCode} variant="outline">
+                    Применить
+                  </Button>
+                </div>
+                {appliedPromo && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-green-700 font-medium">Промокод {appliedPromo.code}</span>
+                      <span className="text-green-700">-{appliedPromo.discount}%</span>
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600">Товары:</span>
+                    <span className="font-medium">{totalPrice.toLocaleString()} ₽</span>
+                  </div>
+                  {promoDiscount > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-green-600">Скидка по промокоду:</span>
+                      <span className="font-medium text-green-600">-{promoDiscount.toLocaleString()} ₽</span>
+                    </div>
+                  )}
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-semibold text-slate-900">Итого:</span>
+                    <span className="text-2xl font-bold text-rose-600">
+                      {finalPrice.toLocaleString()} ₽
+                    </span>
+                  </div>
                 </div>
                 <Button
                   onClick={() => {
@@ -380,12 +502,18 @@ export default function Index() {
 
               <Separator />
 
-              <div className="bg-slate-50 p-4 rounded-lg">
-                <div className="flex justify-between mb-2">
+              <div className="bg-slate-50 p-4 rounded-lg space-y-2">
+                <div className="flex justify-between">
                   <span className="text-slate-600">Товары ({totalItems} шт.)</span>
                   <span className="font-semibold">{totalPrice.toLocaleString()} ₽</span>
                 </div>
-                <div className="flex justify-between mb-2">
+                {promoDiscount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-green-600">Промокод {appliedPromo?.code}</span>
+                    <span className="font-semibold text-green-600">-{promoDiscount.toLocaleString()} ₽</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
                   <span className="text-slate-600">Доставка</span>
                   <span className="font-semibold">300 ₽</span>
                 </div>
@@ -393,7 +521,7 @@ export default function Index() {
                 <div className="flex justify-between">
                   <span className="text-lg font-bold">Итого:</span>
                   <span className="text-lg font-bold text-rose-600">
-                    {(totalPrice + 300).toLocaleString()} ₽
+                    {(finalPrice + 300).toLocaleString()} ₽
                   </span>
                 </div>
               </div>
