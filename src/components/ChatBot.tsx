@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -19,16 +19,43 @@ interface ChatBotProps {
   currentSection: 'chat' | 'help';
 }
 
+const STORAGE_KEY = 'chatbot-messages';
+
 export function ChatBot({ onNavigate, currentSection }: ChatBotProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      text: 'Здравствуйте! Я — корпоративный ассистент для профессиональных консультаций. Чем могу помочь?',
-      sender: 'bot',
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+        }));
+      } catch {
+        return [
+          {
+            id: 1,
+            text: 'Здравствуйте! Я — корпоративный ассистент для профессиональных консультаций. Чем могу помочь?',
+            sender: 'bot' as const,
+            timestamp: new Date(),
+          },
+        ];
+      }
+    }
+    return [
+      {
+        id: 1,
+        text: 'Здравствуйте! Я — корпоративный ассистент для профессиональных консультаций. Чем могу помочь?',
+        sender: 'bot' as const,
+        timestamp: new Date(),
+      },
+    ];
+  });
   const [inputValue, setInputValue] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+  }, [messages]);
 
   const handleSend = () => {
     if (!inputValue.trim()) return;
@@ -56,6 +83,46 @@ export function ChatBot({ onNavigate, currentSection }: ChatBotProps) {
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handleExportJSON = () => {
+    const dataStr = JSON.stringify(messages, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `chat-history-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportText = () => {
+    const textContent = messages
+      .map((msg) => {
+        const time = formatTime(msg.timestamp);
+        const sender = msg.sender === 'user' ? 'Пользователь' : 'Бот';
+        return `[${time}] ${sender}: ${msg.text}`;
+      })
+      .join('\n\n');
+    const dataBlob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `chat-history-${new Date().toISOString().split('T')[0]}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleClearHistory = () => {
+    if (confirm('Вы уверены, что хотите очистить всю историю диалогов?')) {
+      const initialMessage = {
+        id: 1,
+        text: 'Здравствуйте! Я — корпоративный ассистент для профессиональных консультаций. Чем могу помочь?',
+        sender: 'bot' as const,
+        timestamp: new Date(),
+      };
+      setMessages([initialMessage]);
+    }
   };
 
   return (
@@ -108,8 +175,33 @@ export function ChatBot({ onNavigate, currentSection }: ChatBotProps) {
                   <p className="text-sm text-slate-500">Профессиональный чат-бот</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-slate-600">Активен</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportText}
+                    className="gap-2"
+                  >
+                    <Icon name="FileText" size={16} />
+                    Экспорт TXT
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportJSON}
+                    className="gap-2"
+                  >
+                    <Icon name="Download" size={16} />
+                    Экспорт JSON
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearHistory}
+                    className="gap-2 text-red-600 hover:text-red-700"
+                  >
+                    <Icon name="Trash2" size={16} />
+                    Очистить
+                  </Button>
                 </div>
               </div>
             </header>
